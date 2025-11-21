@@ -14,14 +14,15 @@ echo ""
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$PROJECT_ROOT/logs"
 
-cd simulations/delay_tiebreaker
+# work in the specific simulation directory from project root
+cd "$PROJECT_ROOT/simulations/delay_tiebreaker"
 
 echo "[1/2] Running Baseline GPSR (no tiebreaker)..."
-../../Research_project -u Qtenv -c MultiHopPerformanceBaseline \
-    -n ../../src:../../../inet4.5/src:. \
+"$PROJECT_ROOT/Research_project" -u Cmdenv -c MultiHopPerformanceBaseline \
+    -n "$PROJECT_ROOT/src:$PROJECT_ROOT/../inet4.5/src:." \
     --sim-time-limit=40s \
-    --result-dir=../../results \
-    > ../../logs/multihop_baseline.log 2>&1
+    --result-dir="$PROJECT_ROOT/results" \
+    > "$PROJECT_ROOT/logs/multihop_baseline.log" 2>&1
 
 if [ $? -eq 0 ]; then
     echo "✓ Baseline complete"
@@ -33,11 +34,11 @@ fi
 
 echo ""
 echo "[2/2] Running Queue-Aware GPSR (with tiebreaker)..."
-../../Research_project -u Qtenv -c MultiHopPerformanceEnhanced \
-    -n ../../src:../../../inet4.5/src:. \
+"$PROJECT_ROOT/Research_project" -u Cmdenv -c MultiHopPerformanceEnhanced \
+    -n "$PROJECT_ROOT/src:$PROJECT_ROOT/../inet4.5/src:." \
     --sim-time-limit=40s \
-    --result-dir=../../results \
-    > ../../logs/multihop_enhanced.log 2>&1
+    --result-dir="$PROJECT_ROOT/results" \
+    > "$PROJECT_ROOT/logs/multihop_enhanced.log" 2>&1
 
 if [ $? -eq 0 ]; then
     echo "✓ Enhanced complete"
@@ -89,13 +90,11 @@ echo ""
 echo "[2] ROUTING BEHAVIOR"
 echo "─────────────────────────────────────────────────────────────────"
 
-enhanced_via_congested=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.2" multihop_enhanced.log | wc -l | tr -d ' ')
-enhanced_via_idle=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.3" multihop_enhanced.log | wc -l | tr -d ' ')
-baseline_via_congested=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.2" ../../logs/multihop_baseline.log | wc -l | tr -d ' ')
-baseline_via_idle=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.3" ../../logs/multihop_baseline.log | wc -l | tr -d ' ')
+baseline_via_congested=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.2" "$PROJECT_ROOT/logs/multihop_baseline.log" | wc -l | tr -d ' ')
+baseline_via_idle=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.3" "$PROJECT_ROOT/logs/multihop_baseline.log" | wc -l | tr -d ' ')
 
-enhanced_via_congested=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.2" ../../logs/multihop_enhanced.log | wc -l | tr -d ' ')
-enhanced_via_idle=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.3" ../../logs/multihop_enhanced.log | wc -l | tr -d ' ')
+enhanced_via_congested=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.2" "$PROJECT_ROOT/logs/multihop_enhanced.log" | wc -l | tr -d ' ')
+enhanced_via_idle=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.3" "$PROJECT_ROOT/logs/multihop_enhanced.log" | wc -l | tr -d ' ')
 
 echo "Baseline GPSR routing decisions:"
 echo "  Via congested relay (host[1]):  $baseline_via_congested"
@@ -119,8 +118,8 @@ echo ""
 echo "[3] TIEBREAKER ACTIVATIONS"
 echo "─────────────────────────────────────────────────────────────────"
 
-baseline_tiebreakers=$(grep "scalar.*host\[0\].*routing.*tiebreakerActivations[^:]" results/MultiHopPerformanceBaseline-#0.sca | awk '{print $NF}')
-enhanced_tiebreakers=$(grep "scalar.*host\[0\].*routing.*tiebreakerActivations[^:]" results/MultiHopPerformanceEnhanced-#0.sca | awk '{print $NF}')
+baseline_tiebreakers=$(grep "scalar.*host\[0\].*routing.*tiebreakerActivations[^:]" "$PROJECT_ROOT/results/MultiHopPerformanceBaseline-#0.sca" | awk '{print $NF}')
+enhanced_tiebreakers=$(grep "scalar.*host\[0\].*routing.*tiebreakerActivations[^:]" "$PROJECT_ROOT/results/MultiHopPerformanceEnhanced-#0.sca" | awk '{print $NF}')
 
 echo "Baseline: $baseline_tiebreakers (should be 0 - disabled)"
 echo "Enhanced: $enhanced_tiebreakers (activations during congestion)"
@@ -130,8 +129,8 @@ echo "[4] END-TO-END DELAY"
 echo "─────────────────────────────────────────────────────────────────"
 
 # Extract delay statistics
-baseline_delay=$(grep "host\[3\].*app\[1\].*endToEndDelay:histogram" results/MultiHopPerformanceBaseline-#0.sca -A 3 | grep "field mean" | awk '{print $3}')
-enhanced_delay=$(grep "host\[3\].*app\[1\].*endToEndDelay:histogram" results/MultiHopPerformanceEnhanced-#0.sca -A 3 | grep "field mean" | awk '{print $3}')
+baseline_delay=$(grep "host\[3\].*app\[1\].*endToEndDelay:histogram" "$PROJECT_ROOT/results/MultiHopPerformanceBaseline-#0.sca" -A 3 | grep "field mean" | awk '{print $3}')
+enhanced_delay=$(grep "host\[3\].*app\[1\].*endToEndDelay:histogram" "$PROJECT_ROOT/results/MultiHopPerformanceEnhanced-#0.sca" -A 3 | grep "field mean" | awk '{print $3}')
 
 baseline_delay_ms=$(echo "scale=2; $baseline_delay * 1000" | bc 2>/dev/null || echo "N/A")
 enhanced_delay_ms=$(echo "scale=2; $enhanced_delay * 1000" | bc 2>/dev/null || echo "N/A")
@@ -163,8 +162,8 @@ echo ""
 echo "═══════════════════════════════════════════════════════════════════"
 echo ""
 echo "Results saved to:"
-echo "  - results/MultiHopPerformanceBaseline-#0.sca"
-echo "  - results/MultiHopPerformanceEnhanced-#0.sca"
-echo "  - logs/multihop_baseline.log"
-echo "  - logs/multihop_enhanced.log"
+echo "  - $PROJECT_ROOT/results/MultiHopPerformanceBaseline-#0.sca"
+echo "  - $PROJECT_ROOT/results/MultiHopPerformanceEnhanced-#0.sca"
+echo "  - $PROJECT_ROOT/logs/multihop_baseline.log"
+echo "  - $PROJECT_ROOT/logs/multihop_enhanced.log"
 echo ""
