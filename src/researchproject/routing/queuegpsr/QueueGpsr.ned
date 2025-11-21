@@ -43,6 +43,11 @@ simple QueueGpsr like IManetRouting
     // Phase 3: queue-aware delay estimation
     bool enableQueueDelay = default(false); // if true, include TX backlog / bitrate term in delay estimate
 
+        // CPU offload parameters (Phase 3)
+        double cpuTotalHz @unit(Hz) = default(2e9); // total physical CPU capacity (Hz)
+        double offloadShareMin = default(0.2); // min fraction available for offloading
+        double offloadShareMax = default(0.6); // max fraction available for offloading
+
         // visualization parameters
         bool displayBubbles = default(false);   // display bubble messages about changes in routing state for packets
         

@@ -118,6 +118,18 @@ void QueueGpsr::initialize(int stage)
         globalPositionTable.clear();
         // read Phase 3 gating parameter
         enableQueueDelay = par("enableQueueDelay");
+
+        // CPU offload parameters (Phase 3 extension)
+        cpuTotalHz = par("cpuTotalHz");
+        offloadShareMin = par("offloadShareMin");
+        offloadShareMax = par("offloadShareMax");
+
+        // Draw per-node offload share η ∼ Uniform(min,max)
+        double eta = uniform(offloadShareMin, offloadShareMax);
+        cpuOffloadHz = eta * cpuTotalHz;
+        std::cout << "[CPU-OFFLOAD] " << getContainingNode(this)->getFullName()
+                  << " cpuTotalHz=" << cpuTotalHz << " η=" << eta
+                  << " cpuOffloadHz=" << cpuOffloadHz << " Hz" << std::endl;
     }
     else if (stage == INITSTAGE_ROUTING_PROTOCOLS) {
         registerProtocol(Protocol::manet, gate("ipOut"), gate("ipIn"));
@@ -486,6 +498,10 @@ const Ptr<GpsrBeacon> QueueGpsr::createBeacon()
     if (enableQueueDelay) {
         uint32_t localBacklog = (uint32_t)getLocalTxBacklogBytes();
         beacon->setTxBacklogBytes(localBacklog);
+        // include CPU offload capacity in beacon
+        beacon->setCpuOffloadHz(cpuOffloadHz);
+        // backlog cycles left as zero for now
+        beacon->setCpuOffloadBacklogCycles(0.0);
         
         // STEP 3 AUDIT: Log beacon transmission with nonzero backlog (host[7] and host[1])
         if (localBacklog > 0 && (strcmp(getContainingNode(this)->getFullName(), "host[7]") == 0 || 
@@ -500,8 +516,8 @@ const Ptr<GpsrBeacon> QueueGpsr::createBeacon()
         
         // DIAGNOSTIC: Log ALL beacon transmissions to track beacon frequency and queue measurement
         std::cout << "🟦 Beacon TX [" << getContainingNode(this)->getFullName() << "]: t=" << simTime() 
-                  << "s | Q=" << localBacklog << " bytes | nextBeacon≈t=" 
-                  << (simTime() + beaconInterval).dbl() << "s" << std::endl;
+                  << "s | Q=" << localBacklog << " bytes | CPUoffHz=" << cpuOffloadHz
+                  << " | nextBeacon≈t=" << (simTime() + beaconInterval).dbl() << "s" << std::endl;
     } else {
         beacon->setTxBacklogBytes(0);  // Explicit zero when queue-aware disabled
     }
@@ -565,6 +581,13 @@ void QueueGpsr::processBeacon(Packet *packet)
         NeighborQueueInfo info;
         info.bytes = nb;
         info.lastUpdate = simTime();
+        // also read CPU offload fields if present
+        try {
+            info.cpuOffloadHz = beacon->getCpuOffloadHz();
+        } catch (...) { info.cpuOffloadHz = 0.0; }
+        try {
+            info.cpuOffloadBacklogCycles = (unsigned long)beacon->getCpuOffloadBacklogCycles();
+        } catch (...) { info.cpuOffloadBacklogCycles = 0; }
         neighborTxBacklogBytes[beacon->getAddress()] = info;
     }
     catch (...) {
@@ -580,12 +603,12 @@ void QueueGpsr::processBeacon(Packet *packet)
             std::cout << "  Time: " << simTime() << " s\n";
             std::cout << "  Sender: " << beacon->getAddress() << "\n";
             std::cout << "  txBacklogBytes in beacon: " << nb << " bytes\n";
-            std::cout << "  Stored in neighborTxBacklogBytes[" << beacon->getAddress() << "] = {" << nb << " bytes, t=" << simTime() << "}\n";
+            std::cout << "  Stored in neighborTxBacklogBytes[" << beacon->getAddress() << "] = {" << nb << " bytes, cpuOffHz=" << neighborTxBacklogBytes[beacon->getAddress()].cpuOffloadHz << ", t=" << simTime() << "}\n";
             std::cout << "  Neighbor table size: " << neighborTxBacklogBytes.size() << " entries\n";
             std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" << std::flush;
         } else {
             std::cout << "🔵 Beacon RX [host[0]]: t=" << simTime() << "s from " << beacon->getAddress() 
-                      << " | Q=" << nb << " bytes (IDLE)\n" << std::flush;
+                      << " | Q=" << nb << " bytes | cpuOffHz=" << neighborTxBacklogBytes[beacon->getAddress()].cpuOffloadHz << " (IDLE)\n" << std::flush;
         }
     }
     

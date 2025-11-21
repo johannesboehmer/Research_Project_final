@@ -74,9 +74,17 @@ class QueueGpsr : public RoutingProtocolBase, public cListener, public Netfilter
   struct NeighborQueueInfo {
       uint32_t bytes;
       simtime_t lastUpdate;
+      double cpuOffloadHz = 0.0; // neighbor's advertised offload capacity
+      unsigned long cpuOffloadBacklogCycles = 0; // optional backlog in CPU cycles
   };
   std::map<L3Address, NeighborQueueInfo> neighborTxBacklogBytes;
   bool enableQueueDelay = false;
+
+  // CPU offload parameters (Phase 3 extension)
+  double cpuTotalHz = 0.0;
+  double offloadShareMin = 0.0;
+  double offloadShareMax = 0.0;
+  double cpuOffloadHz = 0.0; // this node's effective offload capacity (Hz)
   
   // Local transmit backlog counter (UDP/IP level, avoids MAC queue API issues)
   mutable unsigned long localTxBacklogBytes = 0;
