@@ -10,6 +10,10 @@ echo "Source-Destination: 450m (requires relay)"
 echo "Relays: host[1] congested (2.28 Mbps), host[2] idle"
 echo ""
 
+# Ensure logs directory exists at project root
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+mkdir -p "$PROJECT_ROOT/logs"
+
 cd simulations/delay_tiebreaker
 
 echo "[1/2] Running Baseline GPSR (no tiebreaker)..."
@@ -17,13 +21,13 @@ echo "[1/2] Running Baseline GPSR (no tiebreaker)..."
     -n ../../src:../../../inet4.5/src:. \
     --sim-time-limit=40s \
     --result-dir=../../results \
-    > ../../multihop_baseline.log 2>&1
+    > ../../logs/multihop_baseline.log 2>&1
 
 if [ $? -eq 0 ]; then
     echo "✓ Baseline complete"
 else
-    echo "✗ Baseline failed - check multihop_baseline.log"
-    tail -20 ../../multihop_baseline.log
+    echo "✗ Baseline failed - check logs/multihop_baseline.log"
+    tail -20 ../../logs/multihop_baseline.log
     exit 1
 fi
 
@@ -33,13 +37,13 @@ echo "[2/2] Running Queue-Aware GPSR (with tiebreaker)..."
     -n ../../src:../../../inet4.5/src:. \
     --sim-time-limit=40s \
     --result-dir=../../results \
-    > ../../multihop_enhanced.log 2>&1
+    > ../../logs/multihop_enhanced.log 2>&1
 
 if [ $? -eq 0 ]; then
     echo "✓ Enhanced complete"
 else
-    echo "✗ Enhanced failed - check multihop_enhanced.log"
-    tail -20 ../../multihop_enhanced.log
+    echo "✗ Enhanced failed - check logs/multihop_enhanced.log"
+    tail -20 ../../logs/multihop_enhanced.log
     exit 1
 fi
 
@@ -85,11 +89,13 @@ echo ""
 echo "[2] ROUTING BEHAVIOR"
 echo "─────────────────────────────────────────────────────────────────"
 
-baseline_via_congested=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.2" multihop_baseline.log | wc -l | tr -d ' ')
-baseline_via_idle=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.3" multihop_baseline.log | wc -l | tr -d ' ')
-
 enhanced_via_congested=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.2" multihop_enhanced.log | wc -l | tr -d ' ')
 enhanced_via_idle=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.3" multihop_enhanced.log | wc -l | tr -d ' ')
+baseline_via_congested=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.2" ../../logs/multihop_baseline.log | wc -l | tr -d ' ')
+baseline_via_idle=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.3" ../../logs/multihop_baseline.log | wc -l | tr -d ' ')
+
+enhanced_via_congested=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.2" ../../logs/multihop_enhanced.log | wc -l | tr -d ' ')
+enhanced_via_idle=$(grep "\[ROUTE\].*host\[0\].*nextHop=10.0.0.3" ../../logs/multihop_enhanced.log | wc -l | tr -d ' ')
 
 echo "Baseline GPSR routing decisions:"
 echo "  Via congested relay (host[1]):  $baseline_via_congested"
@@ -159,6 +165,6 @@ echo ""
 echo "Results saved to:"
 echo "  - results/MultiHopPerformanceBaseline-#0.sca"
 echo "  - results/MultiHopPerformanceEnhanced-#0.sca"
-echo "  - multihop_baseline.log"
-echo "  - multihop_enhanced.log"
+echo "  - logs/multihop_baseline.log"
+echo "  - logs/multihop_enhanced.log"
 echo ""
