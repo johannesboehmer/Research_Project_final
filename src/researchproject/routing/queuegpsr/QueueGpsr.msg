@@ -36,8 +36,8 @@ class GpsrBeacon extends FieldsChunk
     L3Address address;
     Coord position;
     uint32_t txBacklogBytes; // local TX backlog in bytes (Phase 3: queue-aware) - fixed-width for portability
-    double cpuOffloadHz; // effective CPU capacity available for offloading (Hz)
-    double cpuOffloadBacklogCycles; // optional: backlog of accepted offloaded work (CPU cycles)
+    double cpuOffloadHz = 0; // effective CPU capacity available for offloading (Hz/cycles per sec)
+    double cpuOffloadBacklogCycles = 0; // current backlog of offloaded work in CPU cycles
 }
 
 //
