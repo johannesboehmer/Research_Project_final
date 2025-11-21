@@ -58,3 +58,5 @@ docs/*.pdf
 # Local configuration
 local.ini
 *.local
+Research_project_dbg
+Research_project
