@@ -109,7 +109,7 @@ This follows INET's rule: `inet.routing.gpsr` → `src/inet/routing/gpsr/`
 The project includes an automated validation test that demonstrates the queue-aware tiebreaker:
 
 ```bash
-./run_multihop_comparison.sh
+scripts/run_multihop_comparison.sh
 ```
 
 This will:
@@ -120,6 +120,8 @@ This will:
 5. Report comprehensive performance metrics
 
 **Expected result:** 214/250 packets (85.6%) routed via idle relay, achieving 92% delay reduction (292ms → 23ms) and 97.6% delivery rate (vs 78.8% baseline).
+
+Note: generated logs and run outputs are now saved under the `logs/` directory.
 
 ### Build and Run Manually
 

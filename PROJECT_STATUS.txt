@@ -58,7 +58,9 @@ Validation Criteria Met (7/7):
   [✓] Optimal next-hop selection (idle relay preferred)
   [✓] Significant delay reduction and delivery improvement
 
-Run Validation: ./run_multihop_comparison.sh
+Run Validation: scripts/run_multihop_comparison.sh
+
+Note: run outputs and logs are saved to the `logs/` directory.
 
 
 PROJECT STRUCTURE
