@@ -17,7 +17,7 @@ mkdir -p "$PROJECT_ROOT/logs"
 cd simulations/delay_tiebreaker
 
 echo "[1/2] Running Baseline GPSR (no tiebreaker)..."
-../../Research_project -u Cmdenv -c MultiHopPerformanceBaseline \
+../../Research_project -u Qtenv -c MultiHopPerformanceBaseline \
     -n ../../src:../../../inet4.5/src:. \
     --sim-time-limit=40s \
     --result-dir=../../results \
@@ -33,7 +33,7 @@ fi
 
 echo ""
 echo "[2/2] Running Queue-Aware GPSR (with tiebreaker)..."
-../../Research_project -u Cmdenv -c MultiHopPerformanceEnhanced \
+../../Research_project -u Qtenv -c MultiHopPerformanceEnhanced \
     -n ../../src:../../../inet4.5/src:. \
     --sim-time-limit=40s \
     --result-dir=../../results \
