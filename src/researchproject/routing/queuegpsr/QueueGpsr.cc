@@ -113,6 +113,17 @@ void QueueGpsr::initialize(int stage)
         EV_INFO << "CPU offload capacity initialized: cpuOffloadHz=" << cpuOffloadHz 
                 << " Hz (" << (eta * 100) << "% of " << cpuTotalHz << " Hz)" << endl;
         
+        // Task model (Phase 5)
+        enableOffloadDecisions = par("enableOffloadDecisions");
+        taskInputBits = par("taskInputBits");
+        taskCyclesPerBit = par("taskCyclesPerBit");
+        
+        if (enableOffloadDecisions) {
+            EV_INFO << "Offload decisions enabled: taskInputBits=" << taskInputBits 
+                    << ", taskCyclesPerBit=" << taskCyclesPerBit 
+                    << " (total cycles per task: " << (taskInputBits * taskCyclesPerBit) << ")" << endl;
+        }
+        
         // context
         host = getContainingNode(this);
         interfaceTable.reference(this, "interfaceTableModule", true);
@@ -1056,6 +1067,133 @@ double QueueGpsr::estimateNeighborDelay(const L3Address& address) const
     return delay;
 }
 
+//
+// Offload decision helpers (Phase 5)
+//
+
+double QueueGpsr::estimateLocalProcessingTime(int taskBits) const
+{
+    if (cpuOffloadHz <= 0) {
+        EV_WARN << "cpuOffloadHz is zero or negative, cannot estimate local processing time" << endl;
+        return std::numeric_limits<double>::infinity();
+    }
+    
+    double totalCycles = taskBits * taskCyclesPerBit;
+    double processingTime = totalCycles / cpuOffloadHz;  // seconds
+    
+    EV_DETAIL << "Local processing estimate: " << taskBits << " bits × " << taskCyclesPerBit 
+              << " cycles/bit = " << totalCycles << " cycles / " << cpuOffloadHz 
+              << " Hz = " << processingTime << "s" << endl;
+    
+    return processingTime;
+}
+
+double QueueGpsr::estimateRemoteProcessingTime(const L3Address& neighbor, int taskBits) const
+{
+    // Look up neighbor's CPU capacity
+    auto it = neighborCpuCapacity.find(neighbor);
+    if (it == neighborCpuCapacity.end()) {
+        EV_WARN << "No CPU capacity info for neighbor " << neighbor << endl;
+        return std::numeric_limits<double>::infinity();
+    }
+    
+    const NeighborCpuInfo& cpuInfo = it->second;
+    
+    // Check freshness
+    simtime_t age = simTime() - cpuInfo.lastUpdate;
+    simtime_t maxAge = beaconInterval * 3;
+    if (age > maxAge) {
+        EV_DETAIL << "Stale CPU info for neighbor " << neighbor << " (age=" << age << "s)" << endl;
+        return std::numeric_limits<double>::infinity();
+    }
+    
+    if (cpuInfo.cpuOffloadHz <= 0) {
+        EV_WARN << "Neighbor " << neighbor << " has zero or negative cpuOffloadHz" << endl;
+        return std::numeric_limits<double>::infinity();
+    }
+    
+    double totalCycles = taskBits * taskCyclesPerBit;
+    double processingTime = totalCycles / cpuInfo.cpuOffloadHz;  // seconds
+    
+    // Optional: add CPU queueing delay if backlog is tracked
+    double cpuQueueDelay = 0.0;
+    if (cpuInfo.cpuOffloadBacklogCycles > 0) {
+        cpuQueueDelay = cpuInfo.cpuOffloadBacklogCycles / cpuInfo.cpuOffloadHz;
+    }
+    
+    EV_DETAIL << "Remote processing estimate for " << neighbor << ": " 
+              << taskBits << " bits × " << taskCyclesPerBit << " cycles/bit = " 
+              << totalCycles << " cycles / " << cpuInfo.cpuOffloadHz << " Hz = " 
+              << processingTime << "s (CPU queue: " << cpuQueueDelay << "s)" << endl;
+    
+    return processingTime + cpuQueueDelay;
+}
+
+double QueueGpsr::estimateOffloadTotalDelay(const L3Address& neighbor, int taskBits) const
+{
+    // T_off,k = T_tx,k + T_proc,k
+    // where T_tx,k includes distance + queue delay (from Phase 3)
+    
+    double txDelay = estimateNeighborDelay(neighbor);  // transmission + queue delay
+    double procDelay = estimateRemoteProcessingTime(neighbor, taskBits);  // processing + CPU queue
+    
+    return txDelay + procDelay;
+}
+
+void QueueGpsr::logOffloadDecisionEstimates(const std::vector<L3Address>& candidates, int taskBits) const
+{
+    if (!enableOffloadDecisions) {
+        return;  // don't log if offload decisions are disabled
+    }
+    
+    double localTime = estimateLocalProcessingTime(taskBits);
+    
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+    std::cout << "🔍 OFFLOAD DECISION ESTIMATES [" << getHostName() << "] t=" << simTime() << "s" << std::endl;
+    std::cout << "   Task: " << taskBits << " bits × " << taskCyclesPerBit 
+              << " cycles/bit = " << (taskBits * taskCyclesPerBit) << " total cycles" << std::endl;
+    std::cout << "   LOCAL processing time: " << (localTime * 1000) << " ms" << std::endl;
+    std::cout << "   ---" << std::endl;
+    
+    L3Address bestNeighbor;
+    double bestOffloadTime = std::numeric_limits<double>::infinity();
+    
+    for (const auto& neighbor : candidates) {
+        double txDelay = estimateNeighborDelay(neighbor);
+        double procDelay = estimateRemoteProcessingTime(neighbor, taskBits);
+        double totalDelay = txDelay + procDelay;
+        
+        // Get CPU capacity for display
+        double cpuGHz = 0.0;
+        auto it = neighborCpuCapacity.find(neighbor);
+        if (it != neighborCpuCapacity.end()) {
+            cpuGHz = it->second.cpuOffloadHz / 1e9;
+        }
+        
+        std::cout << "   Neighbor " << neighbor << " (CPU: " << cpuGHz << " GHz):" << std::endl;
+        std::cout << "     - TX delay:   " << (txDelay * 1000) << " ms" << std::endl;
+        std::cout << "     - Proc delay: " << (procDelay * 1000) << " ms" << std::endl;
+        std::cout << "     - TOTAL:      " << (totalDelay * 1000) << " ms";
+        
+        if (totalDelay < bestOffloadTime) {
+            bestOffloadTime = totalDelay;
+            bestNeighbor = neighbor;
+            std::cout << "  ← BEST offload candidate so far";
+        }
+        std::cout << std::endl;
+    }
+    
+    std::cout << "   ---" << std::endl;
+    std::cout << "   DECISION: ";
+    if (bestOffloadTime < localTime && !bestNeighbor.isUnspecified()) {
+        double improvement = (localTime - bestOffloadTime) * 1000;
+        std::cout << "✅ OFFLOAD to " << bestNeighbor << " (saves " << improvement << " ms)" << std::endl;
+    } else {
+        std::cout << "🏠 PROCESS LOCALLY (no offload benefit)" << std::endl;
+    }
+    std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+}
+
 std::vector<L3Address> QueueGpsr::getPlanarNeighbors() const
 {
     std::vector<L3Address> planarNeighbors;
@@ -1284,6 +1422,11 @@ L3Address QueueGpsr::findGreedyRoutingNextHop(const L3Address& destination, Gpsr
             bestDistance = neighborDistance;
             bestNeighbor = neighborAddress;
         }
+    }
+    
+    // Phase 5: Log offload decision estimates (only when enabled, just logging for now)
+    if (enableOffloadDecisions && !neighborAddresses.empty()) {
+        logOffloadDecisionEstimates(neighborAddresses, taskInputBits);
     }
     
     // STEP 4 AUDIT: Log final decision

@@ -48,6 +48,11 @@ simple QueueGpsr like IManetRouting
         double offloadShareMin = default(0.2);        // minimum fraction of CPU available for offloading
         double offloadShareMax = default(0.6);        // maximum fraction of CPU available for offloading
 
+        // Task model parameters (Phase 5: offloading decisions)
+        bool enableOffloadDecisions = default(false);  // enable local vs offload decision logic
+        int taskInputBits = default(8192);             // task input size in bits (e.g., 1 KB = 8192 bits)
+        double taskCyclesPerBit = default(1000);       // computational complexity (cycles per bit)
+
         // visualization parameters
         bool displayBubbles = default(false);   // display bubble messages about changes in routing state for packets
         

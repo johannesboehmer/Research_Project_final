@@ -106,6 +106,11 @@ class QueueGpsr : public RoutingProtocolBase, public cListener, public Netfilter
     };
     std::map<L3Address, NeighborCpuInfo> neighborCpuCapacity;
 
+    // Task model (Phase 5: offloading decisions)
+    bool enableOffloadDecisions = false;  // enable local vs offload decision logic
+    int taskInputBits = 0;                // task input size in bits
+    double taskCyclesPerBit = 0;          // computational complexity (cycles per bit)
+
   public:
     QueueGpsr();
     virtual ~QueueGpsr();
@@ -189,6 +194,12 @@ class QueueGpsr : public RoutingProtocolBase, public cListener, public Netfilter
     double estimateNeighborDelay(const L3Address& address) const;
   // Phase 3 helper: read local TX backlog bytes from MAC queue
   unsigned long getLocalTxBacklogBytes() const;
+
+    // Offload decision helpers (Phase 5)
+    double estimateLocalProcessingTime(int taskBits) const;
+    double estimateRemoteProcessingTime(const L3Address& neighbor, int taskBits) const;
+    double estimateOffloadTotalDelay(const L3Address& neighbor, int taskBits) const;
+    void logOffloadDecisionEstimates(const std::vector<L3Address>& candidates, int taskBits) const;
 
     // Diagnostic: enumerate MAC submodules and report which implement IPacketCollection
     void auditMacQueues() const;
