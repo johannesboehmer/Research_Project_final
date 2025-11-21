@@ -110,6 +110,15 @@ class QueueGpsr : public RoutingProtocolBase, public cListener, public Netfilter
     bool enableOffloadDecisions = false;  // enable local vs offload decision logic
     int taskInputBits = 0;                // task input size in bits
     double taskCyclesPerBit = 0;          // computational complexity (cycles per bit)
+    double reductionFactor = 0.1;         // output/input size ratio after processing (0.1 = 10x reduction)
+    
+    // Processing task tracking
+    struct ProcessingTask {
+        Packet *packet;
+        double processingTimeSeconds;
+        int originalSizeBits;
+    };
+    std::map<cMessage*, ProcessingTask> pendingProcessingTasks;  // self-messages -> task info
 
   public:
     QueueGpsr();
@@ -200,6 +209,9 @@ class QueueGpsr : public RoutingProtocolBase, public cListener, public Netfilter
     double estimateRemoteProcessingTime(const L3Address& neighbor, int taskBits) const;
     double estimateOffloadTotalDelay(const L3Address& neighbor, int taskBits) const;
     void logOffloadDecisionEstimates(const std::vector<L3Address>& candidates, int taskBits) const;
+    L3Address makeOffloadDecision(const std::vector<L3Address>& candidates, int taskBits, bool& shouldOffload);
+    void scheduleTaskProcessing(Packet *packet, double processingTimeSeconds);
+    void completeTaskProcessing(cMessage *processingCompleteMsg);
 
     // Diagnostic: enumerate MAC submodules and report which implement IPacketCollection
     void auditMacQueues() const;

@@ -117,10 +117,12 @@ void QueueGpsr::initialize(int stage)
         enableOffloadDecisions = par("enableOffloadDecisions");
         taskInputBits = par("taskInputBits");
         taskCyclesPerBit = par("taskCyclesPerBit");
+        reductionFactor = par("reductionFactor");
         
         if (enableOffloadDecisions) {
             EV_INFO << "Offload decisions enabled: taskInputBits=" << taskInputBits 
                     << ", taskCyclesPerBit=" << taskCyclesPerBit 
+                    << ", reductionFactor=" << reductionFactor
                     << " (total cycles per task: " << (taskInputBits * taskCyclesPerBit) << ")" << endl;
         }
         
@@ -229,6 +231,8 @@ void QueueGpsr::processSelfMessage(cMessage *message)
         processNeighborTableDebug();  // STEP 4 AUDIT
     else if (message == preloadDurabilityTimer)
         processPreloadDurabilityTimer();  // PRELOAD DURABILITY
+    else if (pendingProcessingTasks.find(message) != pendingProcessingTasks.end())
+        completeTaskProcessing(message);  // Phase 5: processing completion
     else
         throw cRuntimeError("Unknown self message");
 }
@@ -1192,6 +1196,106 @@ void QueueGpsr::logOffloadDecisionEstimates(const std::vector<L3Address>& candid
         std::cout << "🏠 PROCESS LOCALLY (no offload benefit)" << std::endl;
     }
     std::cout << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" << std::endl;
+}
+
+L3Address QueueGpsr::makeOffloadDecision(const std::vector<L3Address>& candidates, int taskBits, bool& shouldOffload)
+{
+    double localTime = estimateLocalProcessingTime(taskBits);
+    L3Address bestNeighbor;
+    double bestOffloadTime = std::numeric_limits<double>::infinity();
+    
+    // Find best offload candidate
+    for (const auto& neighbor : candidates) {
+        double totalDelay = estimateOffloadTotalDelay(neighbor, taskBits);
+        if (totalDelay < bestOffloadTime) {
+            bestOffloadTime = totalDelay;
+            bestNeighbor = neighbor;
+        }
+    }
+    
+    // Decide: offload if best remote option is better than local
+    shouldOffload = (bestOffloadTime < localTime && !bestNeighbor.isUnspecified());
+    
+    EV_INFO << "Offload decision: localTime=" << localTime << "s, bestOffloadTime=" 
+            << bestOffloadTime << "s, shouldOffload=" << shouldOffload << endl;
+    
+    return bestNeighbor;
+}
+
+void QueueGpsr::scheduleTaskProcessing(Packet *packet, double processingTimeSeconds)
+{
+    // Create a self-message to represent processing completion
+    cMessage *processingCompleteMsg = new cMessage("ProcessingComplete");
+    
+    // Store task info
+    ProcessingTask task;
+    task.packet = packet;
+    task.processingTimeSeconds = processingTimeSeconds;
+    task.originalSizeBits = packet->getBitLength();
+    pendingProcessingTasks[processingCompleteMsg] = task;
+    
+    // Update CPU backlog (task starts processing)
+    double totalCycles = task.originalSizeBits * taskCyclesPerBit;
+    cpuOffloadBacklogCycles += totalCycles;
+    
+    // Schedule completion
+    scheduleAt(simTime() + processingTimeSeconds, processingCompleteMsg);
+    
+    EV_INFO << "Scheduled task processing: " << task.originalSizeBits << " bits, " 
+            << processingTimeSeconds << "s, completion at t=" << (simTime() + processingTimeSeconds) << endl;
+    
+    std::cout << "🔧 [" << getHostName() << "] t=" << simTime() 
+              << "s: Processing task (" << task.originalSizeBits << " bits) for " 
+              << (processingTimeSeconds * 1000) << " ms | CPU backlog now: " 
+              << cpuOffloadBacklogCycles << " cycles" << std::endl;
+}
+
+void QueueGpsr::completeTaskProcessing(cMessage *processingCompleteMsg)
+{
+    // Retrieve task info
+    auto it = pendingProcessingTasks.find(processingCompleteMsg);
+    if (it == pendingProcessingTasks.end()) {
+        EV_WARN << "Processing completion for unknown task" << endl;
+        delete processingCompleteMsg;
+        return;
+    }
+    
+    ProcessingTask task = it->second;
+    Packet *packet = task.packet;
+    
+    // Update CPU backlog (task completes)
+    double totalCycles = task.originalSizeBits * taskCyclesPerBit;
+    cpuOffloadBacklogCycles -= totalCycles;
+    if (cpuOffloadBacklogCycles < 0) cpuOffloadBacklogCycles = 0;  // avoid negative due to rounding
+    
+    // Apply data reduction: shrink packet to reductionFactor * originalSize
+    int reducedSizeBits = (int)(task.originalSizeBits * reductionFactor);
+    packet->setBitLength(reducedSizeBits);
+    
+    EV_INFO << "Task processing complete: reduced from " << task.originalSizeBits 
+            << " bits to " << reducedSizeBits << " bits (" << (reductionFactor * 100) 
+            << "% of original)" << endl;
+    
+    std::cout << "✅ [" << getHostName() << "] t=" << simTime() 
+              << "s: Task complete! Reduced " << task.originalSizeBits << " bits → " 
+              << reducedSizeBits << " bits (" << (reductionFactor * 100) << "%) | CPU backlog now: " 
+              << cpuOffloadBacklogCycles << " cycles" << std::endl;
+    
+    // Mark packet as processed in GPSR option
+    auto networkHeader = packet->peekAtFront<NetworkHeaderBase>();
+    auto mutableNetworkHeader = packet->removeAtFront<NetworkHeaderBase>();
+    GpsrOption *gpsrOption = getGpsrOptionFromNetworkDatagramForUpdate(mutableNetworkHeader);
+    if (gpsrOption) {
+        gpsrOption->setHasBeenProcessed(true);
+    }
+    packet->insertAtFront(mutableNetworkHeader);
+    
+    // Forward the packet (continue routing toward destination)
+    sendUdpPacket(packet);
+    
+    // Clean up
+    pendingProcessingTasks.erase(it);
+    delete processingCompleteMsg;
 }
 
 std::vector<L3Address> QueueGpsr::getPlanarNeighbors() const

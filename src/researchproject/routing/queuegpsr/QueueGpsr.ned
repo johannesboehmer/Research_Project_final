@@ -52,6 +52,7 @@ simple QueueGpsr like IManetRouting
         bool enableOffloadDecisions = default(false);  // enable local vs offload decision logic
         int taskInputBits = default(8192);             // task input size in bits (e.g., 1 KB = 8192 bits)
         double taskCyclesPerBit = default(1000);       // computational complexity (cycles per bit)
+        double reductionFactor = default(0.1);         // output/input size ratio after processing (0.1 = 10x reduction)
 
         // visualization parameters
         bool displayBubbles = default(false);   // display bubble messages about changes in routing state for packets

@@ -54,4 +54,10 @@ class GpsrOption extends TlvOptionBase {
     L3Address currentFaceFirstSenderAddress;   // e0
     L3Address currentFaceFirstReceiverAddress; // e0
     L3Address senderAddress; // TODO this field is not strictly needed by GPSR (should be eliminated)
+    
+    // Phase 5: Offloading metadata
+    bool isOffloadTask = false;              // true if this packet should be offloaded for processing
+    L3Address offloadTargetAddress;          // node selected for offloading
+    int originalPayloadBits = 0;             // original task size before processing
+    bool hasBeenProcessed = false;           // true after processing completion
 }
