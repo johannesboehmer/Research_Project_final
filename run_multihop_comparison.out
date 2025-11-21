@@ -1,0 +1,66 @@
+═══════════════════════════════════════════════════════════════════
+  MULTI-HOP PERFORMANCE COMPARISON
+  Purpose: Measure end-to-end impact when relays are actually used
+═══════════════════════════════════════════════════════════════════
+
+Configuration: 10mW radio power (range ~300m)
+Source-Destination: 450m (requires relay)
+Relays: host[1] congested (2.28 Mbps), host[2] idle
+
+[1/2] Running Baseline GPSR (no tiebreaker)...
+✓ Baseline complete
+
+[2/2] Running Queue-Aware GPSR (with tiebreaker)...
+✓ Enhanced complete
+
+═══════════════════════════════════════════════════════════════════
+  RESULTS ANALYSIS
+═══════════════════════════════════════════════════════════════════
+
+[1] PACKET DELIVERY
+─────────────────────────────────────────────────────────────────
+Baseline GPSR (no tiebreaker):
+  Sent:     250
+  Received: 49
+  Ratio:    19.60%
+
+Queue-Aware GPSR (with tiebreaker):
+  Sent:     250
+  Received: 49
+  Ratio:    19.60%
+
+Delivery ratio: Same for both (expected with light flow)
+
+[2] ROUTING BEHAVIOR
+─────────────────────────────────────────────────────────────────
+Baseline GPSR routing decisions:
+  Via congested relay (host[1]):  250
+  Via idle relay (host[2]):       0
+
+Queue-Aware GPSR routing decisions:
+  Via congested relay (host[1]):  250
+  Via idle relay (host[2]):       0
+
+[3] TIEBREAKER ACTIVATIONS
+─────────────────────────────────────────────────────────────────
+Baseline: 0 (should be 0 - disabled)
+Enhanced: 0 (activations during congestion)
+
+[4] END-TO-END DELAY
+─────────────────────────────────────────────────────────────────
+Baseline GPSR (all via congested relay):
+  Mean delay: 1142.1234242368000 ms
+
+Queue-Aware GPSR (mixed routing):
+  Mean delay: 1142.1234242368000 ms
+
+No change in delay
+
+═══════════════════════════════════════════════════════════════════
+
+Results saved to:
+  - results/MultiHopPerformanceBaseline-#0.sca
+  - results/MultiHopPerformanceEnhanced-#0.sca
+  - multihop_baseline.log
+  - multihop_enhanced.log
+

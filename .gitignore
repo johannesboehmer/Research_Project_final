@@ -1,0 +1,60 @@
+# .gitignore for Queue-Aware GPSR Research Project
+
+# Build outputs
+out/
+*.o
+*.d
+*.so
+*.dylib
+*.dll
+*.exe
+*_m.cc
+*_m.h
+
+# OMNeT++ generated files
+results/
+*.sca
+*.vec
+*.vci
+*.log
+
+# IDE specific
+.settings/
+.cproject
+.project
+.oppbuildspec
+.nedfolders
+.nedexclusions
+.qtenvrc
+.tkenvrc
+
+# OS specific
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+
+# Results and data (keep directory structure, ignore contents)
+results/*
+!results/.gitkeep
+
+# Documentation builds
+docs/_build/
+docs/*.pdf
+
+# Local configuration
+local.ini
+*.local
